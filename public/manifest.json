@@ -1,0 +1,24 @@
+{
+  "name": "OpenClaw Dashboard",
+  "short_name": "OpenClaw",
+  "description": "Mobile-first PWA dashboard for monitoring OpenClaw agents and N8N workflows.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='44' fill='%2316213e'/%3E%3Cpath d='M50 132V60h34c35 0 58 14 58 36s-23 36-58 36H50zm24-21h11c20 0 33-5 33-15S105 81 85 81H74v30z' fill='%23e94560'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='118' fill='%2316213e'/%3E%3Cpath d='M132 352V160h90c93.333 0 154.667 37.333 154.667 96S315.333 352 222 352h-90zm64-56h29.333c53.333 0 88-13.333 88-40s-34.667-40-88-40H196v80z' fill='%23e94560'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
