@@ -34,7 +34,7 @@
             <div>
               <div class="eyebrow">OpenClaw PWA</div>
               <h1>Agent control center</h1>
-              <p class="muted">Live configuration view for agents and local N8N workflows.</p>
+              <p class="muted">Live configuration view for agents, workflows, news & team.</p>
             </div>
             <div class="hero-actions">
               <button id="refresh-button" class="btn btn-secondary" type="button">Refresh</button>
@@ -42,7 +42,16 @@
             </div>
           </header>
 
-          <section class="section-block">
+          <!-- Tab Navigation -->
+          <nav class="tab-nav" id="tab-nav">
+            <button class="tab-btn active" data-tab="bots">🤖 Bots</button>
+            <button class="tab-btn" data-tab="n8n">⚡ N8N Flows</button>
+            <button class="tab-btn" data-tab="news">📰 News</button>
+            <button class="tab-btn" data-tab="employees">👥 Employees</button>
+          </nav>
+
+          <!-- Bots Tab -->
+          <section class="tab-panel active" id="tab-bots">
             <div class="section-heading">
               <h2>Agents</h2>
               <span id="agent-count" class="badge">0</span>
@@ -50,12 +59,31 @@
             <div id="agents-grid" class="card-grid"></div>
           </section>
 
-          <section class="section-block">
+          <!-- N8N Flows Tab -->
+          <section class="tab-panel hidden" id="tab-n8n">
             <div class="section-heading">
               <h2>N8N Workflows</h2>
               <span id="workflow-count" class="badge">0</span>
             </div>
             <div id="workflow-list" class="workflow-list"></div>
+          </section>
+
+          <!-- News Tab -->
+          <section class="tab-panel hidden" id="tab-news">
+            <div class="section-heading">
+              <h2>Tech News</h2>
+              <span id="news-count" class="badge">0</span>
+            </div>
+            <div id="news-list" class="card-grid"></div>
+          </section>
+
+          <!-- Employees Tab -->
+          <section class="tab-panel hidden" id="tab-employees">
+            <div class="section-heading">
+              <h2>Team — HeldenInc</h2>
+              <span id="employee-count" class="badge">0</span>
+            </div>
+            <div id="employees-grid" class="card-grid"></div>
           </section>
         </section>
       </main>
