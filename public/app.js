@@ -1,487 +1,207 @@
 const SESSION_KEY = 'openclaw-dashboard-pin';
+const state = { pin: sessionStorage.getItem(SESSION_KEY) || '', availableModels: [], agents: [], workflows: [], news: [], employees: [], activeTab: 'bots' };
 
-const state = {
-  pin: sessionStorage.getItem(SESSION_KEY) || '',
-  availableModels: [],
-  agents: [],
-  workflows: [],
-  news: [],
-  employees: [],
-  activeTab: 'bots'
-};
+const $ = (id) => document.getElementById(id);
+const el = { loginView: $('login-view'), dashboardView: $('dashboard-view'), loginForm: $('login-form'), pinInput: $('pin-input'), loginError: $('login-error'), refreshButton: $('refresh-button'), logoutButton: $('logout-button'), agentsGrid: $('agents-grid'), workflowsList: $('workflow-list'), newsList: $('news-list'), employeesGrid: $('employees-grid'), agentCount: $('agent-count'), workflowCount: $('workflow-count'), newsCount: $('news-count'), employeeCount: $('employee-count'), tabNav: $('tab-nav'), toast: $('toast') };
 
-const elements = {
-  loginView: document.getElementById('login-view'),
-  dashboardView: document.getElementById('dashboard-view'),
-  loginForm: document.getElementById('login-form'),
-  pinInput: document.getElementById('pin-input'),
-  loginError: document.getElementById('login-error'),
-  refreshButton: document.getElementById('refresh-button'),
-  logoutButton: document.getElementById('logout-button'),
-  agentsGrid: document.getElementById('agents-grid'),
-  workflowsList: document.getElementById('workflow-list'),
-  newsList: document.getElementById('news-list'),
-  employeesGrid: document.getElementById('employees-grid'),
-  agentCount: document.getElementById('agent-count'),
-  workflowCount: document.getElementById('workflow-count'),
-  newsCount: document.getElementById('news-count'),
-  employeeCount: document.getElementById('employee-count'),
-  tabNav: document.getElementById('tab-nav'),
-  toast: document.getElementById('toast')
-};
-
-function api(path, options = {}) {
-  const headers = new Headers(options.headers || {});
-
-  if (state.pin) {
-    headers.set('x-pin', state.pin);
-  }
-
-  if (options.body && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
-  }
-
-  return fetch(path, {
-    ...options,
-    headers
-  });
+function api(path, opts = {}) {
+  const h = new Headers(opts.headers || {});
+  if (state.pin) h.set('x-pin', state.pin);
+  if (opts.body && !h.has('Content-Type')) h.set('Content-Type', 'application/json');
+  return fetch(path, { ...opts, headers: h });
 }
 
-function showToast(message, isError = false) {
-  elements.toast.textContent = message;
-  elements.toast.classList.remove('hidden');
-  elements.toast.style.borderColor = isError ? 'rgba(233, 69, 96, 0.45)' : 'rgba(70, 229, 164, 0.35)';
-  clearTimeout(showToast.timer);
-  showToast.timer = setTimeout(() => {
-    elements.toast.classList.add('hidden');
-  }, 2600);
+function showToast(msg, err = false) {
+  el.toast.textContent = msg;
+  el.toast.classList.remove('hidden');
+  el.toast.style.borderColor = err ? 'rgba(233,69,96,0.45)' : 'rgba(70,229,164,0.35)';
+  clearTimeout(showToast.t);
+  showToast.t = setTimeout(() => el.toast.classList.add('hidden'), 2600);
 }
 
-function setView(authenticated) {
-  elements.loginView.classList.toggle('hidden', authenticated);
-  elements.dashboardView.classList.toggle('hidden', !authenticated);
-  elements.loginView.classList.toggle('active', !authenticated);
-  elements.dashboardView.classList.toggle('active', authenticated);
-
-  if (!authenticated) {
-    elements.pinInput.focus();
-  }
+function setView(auth) {
+  el.loginView.classList.toggle('hidden', auth);
+  el.dashboardView.classList.toggle('hidden', !auth);
+  el.loginView.classList.toggle('active', !auth);
+  el.dashboardView.classList.toggle('active', auth);
+  if (!auth) el.pinInput.focus();
 }
 
-// Tab navigation
-function switchTab(tabId) {
-  state.activeTab = tabId;
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === tabId);
-  });
-  document.querySelectorAll('.tab-panel').forEach(panel => {
-    const isActive = panel.id === `tab-${tabId}`;
-    panel.classList.toggle('active', isActive);
-    panel.classList.toggle('hidden', !isActive);
-  });
+function switchTab(id) {
+  state.activeTab = id;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === id));
+  document.querySelectorAll('.tab-panel').forEach(p => { const a = p.id === `tab-${id}`; p.classList.toggle('active', a); p.classList.toggle('hidden', !a); });
 }
+el.tabNav.addEventListener('click', (e) => { const b = e.target.closest('.tab-btn'); if (b) switchTab(b.dataset.tab); });
 
-elements.tabNav.addEventListener('click', (e) => {
-  const btn = e.target.closest('.tab-btn');
-  if (!btn) return;
-  switchTab(btn.dataset.tab);
-});
+function esc(v) { return String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
+function timeAgo(ts) { const s = Math.floor((Date.now() - ts) / 1000); if (s < 60) return 'just now'; const m = Math.floor(s/60); if (m < 60) return `${m}m ago`; const h = Math.floor(m/60); if (h < 24) return `${h}h ago`; return `${Math.floor(h/24)}d ago`; }
 
-function statusClass(status) {
-  if (status === 'Online' || status === 'Ready') return 'status-pill';
-  if (status === 'Unknown') return 'status-pill unknown';
-  return 'status-pill warning';
+function statusPill(status) {
+  const cls = { Online: '', Offline: 'offline', Error: 'error', Repair: 'repair', Unknown: 'unknown' }[status] || 'unknown';
+  return `<span class="status-pill ${cls}">${esc(status)}</span>`;
 }
 
 function renderAgents() {
-  elements.agentCount.textContent = String(state.agents.length);
+  el.agentCount.textContent = String(state.agents.length);
+  if (!state.agents.length) { el.agentsGrid.innerHTML = '<div class="empty-state">Geen agents gevonden.</div>'; return; }
+  el.agentsGrid.innerHTML = state.agents.map((a) => {
+    const opts = state.availableModels.map(m => `<option value="${esc(m)}" ${m === a.model ? 'selected' : ''}>${esc(m)}</option>`).join('');
+    return `<article class="agent-card">
+      <div class="agent-header">
+        <div><div class="agent-name"><span class="agent-emoji">${a.emoji||'🤖'}</span> ${esc(a.name)}</div><div class="agent-role">${esc(a.role||'')}</div></div>
+        ${statusPill(a.status)}
+      </div>
+      <div class="agent-body">
+        ${a.description ? `<div class="agent-desc">${esc(a.description)}</div>` : ''}
+        <div class="meta-row"><div class="meta-label">Model</div><div class="agent-meta model-tag">${esc(a.model)}</div></div>
+        <label class="field"><span>Switch model</span><select data-agent-model="${esc(a.id)}">${opts}</select></label>
+        <div class="card-actions"><a class="link-chip" href="${esc(a.trelloUrl)}" target="_blank" rel="noreferrer">📋 Trello</a></div>
+      </div>
+    </article>`;
+  }).join('');
 
-  if (!state.agents.length) {
-    elements.agentsGrid.innerHTML = '<div class="empty-state">No agents available in openclaw.json.</div>';
-    return;
-  }
-
-  elements.agentsGrid.innerHTML = state.agents
-    .map((agent) => {
-      const options = state.availableModels
-        .map((model) => `<option value="${escapeHtml(model)}" ${model === agent.model ? 'selected' : ''}>${escapeHtml(model)}</option>`)
-        .join('');
-
-      const emoji = agent.emoji || '🤖';
-      const role = agent.role || '';
-      const desc = agent.description || '';
-      const discord = agent.discordChannel || '';
-
-      return `
-        <article class="agent-card">
-          <div class="agent-header">
-            <div>
-              <div class="agent-name"><span class="agent-emoji">${emoji}</span> ${escapeHtml(agent.name)}</div>
-              <div class="agent-role">${escapeHtml(role)}</div>
-            </div>
-            <span class="${statusClass(agent.status)}">${escapeHtml(agent.status)}</span>
-          </div>
-          <div class="agent-body">
-            ${desc ? `<div class="agent-description">${escapeHtml(desc)}</div>` : ''}
-            <div class="meta-row">
-              <div class="meta-label">Model</div>
-              <div class="agent-meta">${escapeHtml(agent.model)}</div>
-            </div>
-            <label class="field">
-              <span>Switch model</span>
-              <select data-agent-model="${escapeHtml(agent.id)}">${options}</select>
-            </label>
-            ${discord ? `<div class="meta-row"><div class="meta-label">Discord</div><div class="agent-meta">${escapeHtml(discord)}</div></div>` : ''}
-            <div class="card-actions">
-              <a class="link-chip" href="${escapeHtml(agent.trelloUrl)}" target="_blank" rel="noreferrer">📋 Trello</a>
-            </div>
-          </div>
-        </article>
-      `;
-    })
-    .join('');
-
-  elements.agentsGrid.querySelectorAll('select[data-agent-model]').forEach((select) => {
-    select.addEventListener('change', async (event) => {
-      const agentId = event.target.dataset.agentModel;
-      const model = event.target.value;
-      const original = state.agents.find((item) => item.id === agentId)?.model || '';
-      event.target.disabled = true;
-
+  el.agentsGrid.querySelectorAll('select[data-agent-model]').forEach(sel => {
+    sel.addEventListener('change', async (e) => {
+      const id = e.target.dataset.agentModel, model = e.target.value;
+      const orig = state.agents.find(a => a.id === id)?.model || '';
+      e.target.disabled = true;
       try {
-        const response = await api(`/api/agents/${encodeURIComponent(agentId)}/model`, {
-          method: 'POST',
-          body: JSON.stringify({ model })
-        });
-
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.error || 'Unable to update model');
-        }
-
-        const index = state.agents.findIndex((item) => item.id === agentId);
-        if (index !== -1) {
-          state.agents[index] = payload.agent;
-        }
+        const r = await api(`/api/agents/${encodeURIComponent(id)}/model`, { method: 'POST', body: JSON.stringify({ model }) });
+        const p = await r.json();
+        if (!r.ok) throw new Error(p.error);
+        const i = state.agents.findIndex(a => a.id === id);
+        if (i !== -1) state.agents[i].model = model;
         renderAgents();
-        showToast(`Model updated for ${payload.agent.name}`);
-      } catch (error) {
-        event.target.value = original;
-        showToast(error.message, true);
-      } finally {
-        event.target.disabled = false;
-      }
+        showToast(`Model updated: ${p.agent?.name || id} → ${model}`);
+      } catch (err) { e.target.value = orig; showToast(err.message, true); }
+      finally { e.target.disabled = false; }
     });
   });
 }
 
 function renderWorkflows() {
-  elements.workflowCount.textContent = String(state.workflows.length);
-
-  if (state._n8nNotConfigured) {
-    elements.workflowsList.innerHTML = `
-      <div class="empty-state" style="text-align:center;padding:32px 20px;">
-        <div style="font-size:2.4rem;margin-bottom:12px;">⚡</div>
-        <div style="font-size:1.1rem;font-weight:600;margin-bottom:8px;">N8N Not Configured</div>
-        <div>Set the <code style="background:rgba(255,255,255,0.1);padding:2px 8px;border-radius:6px;">N8N_API_KEY</code> environment variable to connect your N8N instance.</div>
-      </div>`;
+  el.workflowCount.textContent = String(state.workflows.length);
+  if (state._n8nOff) {
+    el.workflowsList.innerHTML = `<div class="empty-state center"><div class="big-icon">⚡</div><div class="title">N8N Not Connected</div><div>Set <code>N8N_API_KEY</code> env var or start N8N locally.</div></div>`;
     return;
   }
-
-  if (!state.workflows.length) {
-    elements.workflowsList.innerHTML = '<div class="empty-state">No workflows returned by N8N, or N8N is currently unavailable.</div>';
-    return;
+  let html = `<div class="workflow-toolbar"><button class="btn-create" id="create-workflow-btn">+ New Workflow</button></div>`;
+  if (!state.workflows.length) { html += '<div class="empty-state">Geen workflows. Start N8N of maak een nieuwe aan.</div>'; }
+  else {
+    html += state.workflows.map(w => `<article class="workflow-card">
+      <div class="workflow-header"><div><div class="workflow-name">${esc(w.name||'Untitled')}</div><div class="workflow-meta">ID: ${esc(w.id||'?')}</div></div><span class="badge ${w.active?'active':''}">${w.active?'Active':'Inactive'}</span></div>
+      <div class="workflow-body"><div class="toggle-row"><div class="workflow-meta">Toggle workflow</div><label class="switch"><input type="checkbox" data-wf-toggle="${esc(w.id||'')}" ${w.active?'checked':''}/><span class="slider"></span></label></div></div>
+    </article>`).join('');
   }
+  el.workflowsList.innerHTML = html;
 
-  elements.workflowsList.innerHTML = state.workflows
-    .map((workflow) => `
-      <article class="workflow-card">
-        <div class="workflow-header">
-          <div>
-            <div class="workflow-name">${escapeHtml(workflow.name || 'Untitled workflow')}</div>
-            <div class="workflow-meta">ID: ${escapeHtml(workflow.id || 'Unknown')}</div>
-          </div>
-          <span class="badge">${workflow.active ? 'Active' : 'Inactive'}</span>
-        </div>
-        <div class="workflow-body">
-          <div class="toggle-row">
-            <div class="workflow-meta">Toggle workflow state directly from the dashboard.</div>
-            <label class="switch" aria-label="Toggle workflow ${escapeHtml(workflow.name || workflow.id || '')}">
-              <input type="checkbox" data-workflow-toggle="${escapeHtml(workflow.id || '')}" ${workflow.active ? 'checked' : ''} />
-              <span class="slider"></span>
-            </label>
-          </div>
-        </div>
-      </article>
-    `)
-    .join('');
-
-  elements.workflowsList.querySelectorAll('input[data-workflow-toggle]').forEach((input) => {
-    input.addEventListener('change', async (event) => {
-      const workflowId = event.target.dataset.workflowToggle;
-      const active = event.target.checked;
-      event.target.disabled = true;
-
+  // Create workflow button
+  const createBtn = document.getElementById('create-workflow-btn');
+  if (createBtn) {
+    createBtn.addEventListener('click', async () => {
+      const name = prompt('Workflow naam:');
+      if (!name) return;
       try {
-        const response = await api(`/api/n8n/workflows/${encodeURIComponent(workflowId)}/toggle`, {
-          method: 'POST',
-          body: JSON.stringify({ active })
-        });
-        const payload = await response.json();
+        const r = await api('/api/n8n/workflows', { method: 'POST', body: JSON.stringify({ name }) });
+        const p = await r.json();
+        if (!r.ok) throw new Error(p.error || 'Failed');
+        showToast(`Workflow "${name}" aangemaakt!`);
+        await loadDashboard();
+      } catch (err) { showToast(err.message, true); }
+    });
+  }
 
-        if (!response.ok) {
-          throw new Error(payload.error || 'Unable to update workflow');
-        }
-
-        const index = state.workflows.findIndex((item) => String(item.id) === String(workflowId));
-        if (index !== -1) {
-          state.workflows[index] = payload.data || payload;
-          state.workflows[index].active = active;
-        }
+  // Toggle handlers
+  el.workflowsList.querySelectorAll('input[data-wf-toggle]').forEach(inp => {
+    inp.addEventListener('change', async (e) => {
+      const wfId = e.target.dataset.wfToggle, active = e.target.checked;
+      e.target.disabled = true;
+      try {
+        const r = await api(`/api/n8n/workflows/${encodeURIComponent(wfId)}/toggle`, { method: 'POST', body: JSON.stringify({ active }) });
+        if (!r.ok) throw new Error((await r.json()).error);
+        const i = state.workflows.findIndex(w => String(w.id) === String(wfId));
+        if (i !== -1) state.workflows[i].active = active;
         renderWorkflows();
         showToast(`Workflow ${active ? 'activated' : 'deactivated'}`);
-      } catch (error) {
-        event.target.checked = !active;
-        showToast(error.message, true);
-      } finally {
-        event.target.disabled = false;
-      }
+      } catch (err) { e.target.checked = !active; showToast(err.message, true); }
+      finally { e.target.disabled = false; }
     });
   });
 }
 
 function renderNews() {
-  elements.newsCount.textContent = String(state.news.length);
-
-  if (!state.news.length) {
-    elements.newsList.innerHTML = '<div class="empty-state">No news available. Try refreshing.</div>';
-    return;
-  }
-
-  elements.newsList.innerHTML = state.news
-    .map((item) => {
-      const timeAgo = formatTimeAgo(item.time * 1000);
-      return `
-        <article class="news-card">
-          <div class="news-header">
-            <a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer" class="news-title">${escapeHtml(item.title)}</a>
-          </div>
+  el.newsCount.textContent = String(state.news.length);
+  if (!state.news.length) { el.newsList.innerHTML = '<div class="empty-state">Geen nieuws beschikbaar.</div>'; return; }
+  el.newsList.innerHTML = state.news.map(n => {
+    const domain = esc(n.source);
+    const favicon = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+    return `<article class="news-card">
+      <div class="news-content">
+        <div class="news-icon"><img src="${favicon}" alt="" width="20" height="20" loading="lazy" onerror="this.style.display='none'"/></div>
+        <div class="news-text">
+          <a href="${esc(n.url)}" target="_blank" rel="noreferrer" class="news-title">${esc(n.title)}</a>
           <div class="news-meta-row">
-            <span class="news-source">${escapeHtml(item.source)}</span>
+            <span class="news-source">${domain}</span>
             <span class="news-dot">·</span>
-            <span class="news-time">${escapeHtml(timeAgo)}</span>
+            <span>${esc(timeAgo(n.time*1000))}</span>
             <span class="news-dot">·</span>
-            <span class="news-score">▲ ${item.score}</span>
+            <span>▲ ${n.score}</span>
             <span class="news-dot">·</span>
-            <a href="${escapeHtml(item.hnUrl)}" target="_blank" rel="noreferrer" class="news-comments">${item.comments} comments</a>
+            <a href="${esc(n.hnUrl)}" target="_blank" rel="noreferrer" class="news-comments">${n.comments} 💬</a>
           </div>
-        </article>
-      `;
-    })
-    .join('');
+        </div>
+      </div>
+    </article>`;
+  }).join('');
 }
 
 function renderEmployees() {
-  elements.employeeCount.textContent = String(state.employees.length);
-
-  if (!state.employees.length) {
-    elements.employeesGrid.innerHTML = '<div class="empty-state">No employees loaded.</div>';
-    return;
-  }
-
-  elements.employeesGrid.innerHTML = state.employees
-    .map((emp) => `
-      <article class="employee-card">
-        <div class="employee-avatar">${emp.avatar || '👤'}</div>
-        <div class="employee-info">
-          <div class="employee-name">${escapeHtml(emp.name)}</div>
-          <div class="employee-role">${escapeHtml(emp.role)}</div>
-          <div class="employee-company">${escapeHtml(emp.company)}</div>
-        </div>
-        <div class="employee-actions">
-          <span class="status-pill">${escapeHtml(emp.status)}</span>
-          ${emp.trelloUrl ? `<a class="link-chip small" href="${escapeHtml(emp.trelloUrl)}" target="_blank" rel="noreferrer">📋 Trello</a>` : ''}
-        </div>
-      </article>
-    `)
-    .join('');
-}
-
-function formatTimeAgo(timestamp) {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return 'just now';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+  el.employeeCount.textContent = String(state.employees.length);
+  if (!state.employees.length) { el.employeesGrid.innerHTML = '<div class="empty-state">Geen medewerkers.</div>'; return; }
+  el.employeesGrid.innerHTML = state.employees.map(e => `<article class="employee-card">
+    <div class="employee-avatar">${e.avatar||'👤'}</div>
+    <div class="employee-info"><div class="employee-name">${esc(e.name)}</div><div class="employee-role">${esc(e.role)}</div><div class="employee-company">${esc(e.company)}</div></div>
+    <div class="employee-actions">
+      <span class="status-pill">${esc(e.status)}</span>
+      ${e.trelloUrl ? `<a class="link-chip sm" href="${esc(e.trelloUrl)}" target="_blank" rel="noreferrer">📋 Trello</a>` : ''}
+    </div>
+  </article>`).join('');
 }
 
 async function loadDashboard() {
-  elements.refreshButton.disabled = true;
-
+  el.refreshButton.disabled = true;
   try {
-    const [agentsResponse, workflowsResponse, newsResponse, employeesResponse] = await Promise.all([
-      api('/api/agents'),
-      api('/api/n8n/workflows'),
-      api('/api/news'),
-      api('/api/employees')
-    ]);
-
-    if (agentsResponse.status === 401) {
-      logout();
-      showToast('Session expired. Please log in again.', true);
-      return;
-    }
-
-    const agentsPayload = await agentsResponse.json();
-
-    if (agentsResponse.ok) {
-      state.availableModels = agentsPayload.availableModels || [];
-      state.agents = agentsPayload.agents || [];
-    }
-
-    // Load workflows
-    state._n8nNotConfigured = false;
-    try {
-      const workflowsPayload = await workflowsResponse.json();
-      if (workflowsPayload._notConfigured) {
-        state._n8nNotConfigured = true;
-        state.workflows = [];
-      } else if (workflowsResponse.ok) {
-        state.workflows = Array.isArray(workflowsPayload)
-          ? workflowsPayload
-          : workflowsPayload.data || workflowsPayload.workflows || [];
-      } else {
-        state.workflows = [];
-      }
-    } catch {
-      state.workflows = [];
-    }
-
-    // Load news
-    try {
-      const newsPayload = await newsResponse.json();
-      if (newsResponse.ok) {
-        state.news = newsPayload.news || [];
-      } else {
-        state.news = [];
-      }
-    } catch {
-      state.news = [];
-    }
-
-    // Load employees
-    try {
-      const employeesPayload = await employeesResponse.json();
-      if (employeesResponse.ok) {
-        state.employees = employeesPayload.employees || [];
-      } else {
-        state.employees = [];
-      }
-    } catch {
-      state.employees = [];
-    }
-
-    renderAgents();
-    renderWorkflows();
-    renderNews();
-    renderEmployees();
-    setView(true);
-
-    if (!agentsResponse.ok) {
-      showToast(agentsPayload.error || 'Failed to load agents', true);
-    }
-  } catch (error) {
-    renderAgents();
-    renderWorkflows();
-    renderNews();
-    renderEmployees();
-    setView(true);
-    showToast(error.message, true);
-  } finally {
-    elements.refreshButton.disabled = false;
-  }
+    const [aR, wR, nR, eR] = await Promise.all([api('/api/agents'), api('/api/n8n/workflows'), api('/api/news'), api('/api/employees')]);
+    if (aR.status === 401) { logout(); showToast('Session expired.', true); return; }
+    const aP = await aR.json();
+    if (aR.ok) { state.availableModels = aP.availableModels || []; state.agents = aP.agents || []; }
+    state._n8nOff = false;
+    try { const wP = await wR.json(); if (wP._notConfigured) { state._n8nOff = true; state.workflows = []; } else if (wR.ok) { state.workflows = Array.isArray(wP) ? wP : wP.data || wP.workflows || []; } else { state.workflows = []; } } catch { state.workflows = []; }
+    try { const nP = await nR.json(); state.news = nR.ok ? nP.news || [] : []; } catch { state.news = []; }
+    try { const eP = await eR.json(); state.employees = eR.ok ? eP.employees || [] : []; } catch { state.employees = []; }
+    renderAgents(); renderWorkflows(); renderNews(); renderEmployees(); setView(true);
+    if (!aR.ok) showToast(aP.error || 'Failed to load', true);
+  } catch (err) { renderAgents(); renderWorkflows(); renderNews(); renderEmployees(); setView(true); showToast(err.message, true); }
+  finally { el.refreshButton.disabled = false; }
 }
 
 async function login(pin) {
-  elements.loginError.classList.add('hidden');
-
-  const response = await fetch('/api/auth', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ pin })
-  });
-
-  const payload = await response.json();
-  if (!response.ok || !payload.ok) {
-    throw new Error(payload.error || 'Login failed');
-  }
-
-  state.pin = pin;
-  sessionStorage.setItem(SESSION_KEY, pin);
+  el.loginError.classList.add('hidden');
+  const r = await fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
+  const p = await r.json();
+  if (!r.ok || !p.ok) throw new Error(p.error || 'Login failed');
+  state.pin = pin; sessionStorage.setItem(SESSION_KEY, pin);
 }
 
-function logout() {
-  state.pin = '';
-  state.agents = [];
-  state.workflows = [];
-  state.news = [];
-  state.employees = [];
-  sessionStorage.removeItem(SESSION_KEY);
-  setView(false);
-}
+function logout() { state.pin = ''; state.agents = []; state.workflows = []; state.news = []; state.employees = []; sessionStorage.removeItem(SESSION_KEY); setView(false); }
 
-elements.loginForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const pin = elements.pinInput.value.trim();
-  const submitButton = elements.loginForm.querySelector('button[type="submit"]');
-  submitButton.disabled = true;
-
-  try {
-    await login(pin);
-    elements.pinInput.value = '';
-    await loadDashboard();
-    showToast('Dashboard unlocked');
-  } catch (error) {
-    elements.loginError.textContent = error.message;
-    elements.loginError.classList.remove('hidden');
-  } finally {
-    submitButton.disabled = false;
-  }
+el.loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault(); const pin = el.pinInput.value.trim(); const btn = el.loginForm.querySelector('button[type="submit"]'); btn.disabled = true;
+  try { await login(pin); el.pinInput.value = ''; await loadDashboard(); showToast('Dashboard unlocked'); } catch (err) { el.loginError.textContent = err.message; el.loginError.classList.remove('hidden'); } finally { btn.disabled = false; }
 });
+el.refreshButton.addEventListener('click', () => loadDashboard());
+el.logoutButton.addEventListener('click', () => { logout(); showToast('Logged out'); });
 
-elements.refreshButton.addEventListener('click', () => {
-  loadDashboard();
-});
-
-elements.logoutButton.addEventListener('click', () => {
-  logout();
-  showToast('Logged out');
-});
-
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((error) => {
-      console.error('Service worker registration failed:', error);
-    });
-  });
-}
-
-if (state.pin) {
-  loadDashboard();
-} else {
-  setView(false);
-}
+if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); }); }
+if (state.pin) loadDashboard(); else setView(false);

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'openclaw-dashboard-v2';
+const CACHE_NAME = 'openclaw-dashboard-v3';
 const ASSETS = [
   '/',
   '/index.html',
