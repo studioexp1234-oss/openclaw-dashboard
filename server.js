@@ -3,12 +3,12 @@ const fs = require('fs');
 const path = require('path');
 
 const app = express();
-const PORT = 3458;
-const PIN = '1337';
-const CONFIG_PATH = '/Users/mylilbitch/.openclaw/openclaw.json';
-const N8N_BASE_URL = 'http://localhost:5678/api/v1';
-const N8N_API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyZGU4YWNiMi02NWI4LTQ5NDUtYjYzMi0yMDRhMThkNmUzNDkiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiMzFhZTNmNzgtNjllYy00ZGEzLTlhM2QtZTY3NzE2ODI3YjU2IiwiaWF0IjoxNzc0MjQyNjgyfQ.1XTMcC-xMSmLSuFHeHAHnQx3yMtQpswN-79TsOhldaA';
-const TRELLO_BOARD_URL = 'https://trello.com/b/ZTblLRG1';
+const PORT = process.env.PORT || 3458;
+const PIN = process.env.DASHBOARD_PIN || '1337';
+const CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || '/Users/mylilbitch/.openclaw/openclaw.json';
+const N8N_BASE_URL = process.env.N8N_BASE_URL || 'http://localhost:5678/api/v1';
+const N8N_API_KEY = process.env.N8N_API_KEY || 'eyJhbG...ldaA';
+const TRELLO_BOARD_URL = process.env.TRELLO_BOARD_URL || 'https://trello.com/b/ZTblLRG1';
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
